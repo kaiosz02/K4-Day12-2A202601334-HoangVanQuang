@@ -132,40 +132,45 @@ def chat(
     bucket: TokenBucket = Depends(get_bucket),
     guard: CostGuard = Depends(get_cost_guard),
 ):
-    """Gửi một tin nhắn tới service.
+    # 1. Trừ 1 token khỏi xô rate limit (nếu hết -> ném 429)
+    bucket.consume(client_id)
 
-    TODO (CP3 + CP4) — làm ĐÚNG THỨ TỰ sau:
-      1. ``bucket.consume(client_id)``        → 429 nếu gọi quá nhanh
-      2. ``guard.check(client_id)``           → 402 nếu hết ngân sách ngày
-      3. ``history = store.history(client_id)``
-      4. ``result = generate_reply(payload.message, history)``
-      5. ``store.add_turn(client_id, "user", payload.message)`` và
-         ``store.add_turn(client_id, "assistant", result["text"])``
-      6. ``guard.record(client_id, result["usd_cost"])``
-      7. ``emit("chat_completed", client_id=client_id,
-         prompt_tokens=result["prompt_tokens"],
-         completion_tokens=result["completion_tokens"],
-         usd_cost=result["usd_cost"])``
-      8. trả về::
+    # 2. Kiểm tra ngân sách ngày (nếu hết -> ném 402)
+    guard.check(client_id)
 
-            {
-                "reply": result["text"],
-                "client_id": client_id,
-                "turns_before": len(history),
-                "usd_cost": result["usd_cost"],
-                "usage": {
-                    "prompt": result["prompt_tokens"],
-                    "completion": result["completion_tokens"],
-                },
-            }
+    # 3. Lấy lịch sử chat từ Redis store
+    history = store.history(client_id)
 
-    Vì sao check trước rồi mới gọi LLM? Vì tiền mất ở bước gọi LLM. Chặn sau
-    khi đã gọi thì bạn vừa trả tiền vừa trả lỗi.
+    # 4. Gọi LLM tạo câu trả lời
+    result = generate_reply(payload.message, history)
 
-    ``client_id`` do ``verify_bearer_token`` trả về, nên request không có
-    token hợp lệ sẽ dừng ở 401 trước khi chạm vào bất cứ dòng nào ở đây.
-    """
-    raise NotImplementedError("TODO (CP3/CP4): cài đặt /chat")
+    # 5. Lưu câu hỏi và câu trả lời vào Redis store
+    store.add_turn(client_id, "user", payload.message)
+    store.add_turn(client_id, "assistant", result["text"])
+
+    # 6. Ghi nhận chi phí vừa tiêu
+    guard.record(client_id, result["usd_cost"])
+
+    # 7. In log dạng JSON
+    emit(
+        "chat_completed",
+        client_id=client_id,
+        prompt_tokens=result["prompt_tokens"],
+        completion_tokens=result["completion_tokens"],
+        usd_cost=result["usd_cost"],
+    )
+
+    # 8. Trả kết quả về cho client
+    return {
+        "reply": result["text"],
+        "client_id": client_id,
+        "turns_before": len(history),
+        "usd_cost": result["usd_cost"],
+        "usage": {
+            "prompt": result["prompt_tokens"],
+            "completion": result["completion_tokens"],
+        },
+    }
 
 
 if __name__ == "__main__":
