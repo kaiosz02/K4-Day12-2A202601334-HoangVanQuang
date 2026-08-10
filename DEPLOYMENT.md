@@ -73,31 +73,72 @@ done; echo
 
 Dán output của các lệnh trên vào đây:
 
-```http
-# 1. Liveness
+
+# 1. Liveness — mong đợi 200 {"status":"ok"}
 HTTP/1.1 200 OK
+Date: Mon, 10 Aug 2026 10:14:53 GMT
 Content-Type: application/json
+Transfer-Encoding: chunked
+Connection: keep-alive
+rndr-id: 0599124c-1350-4644
+Server: cloudflare
+vary: Accept-Encoding
+x-render-origin-server: uvicorn
+cf-cache-status: DYNAMIC
+CF-RAY: a28e3c7afd9aff47-SIN
+alt-svc: h3=":443"; ma=86400
 {"status":"ok","service":"day12-chat-service","version":"1.0.0"}
 
-# 2. Readiness
+# 2. Readiness — mong đợi 200 {"status":"ready"} (đã nối được Redis)
 HTTP/1.1 200 OK
+Date: Mon, 10 Aug 2026 10:16:31 GMT
 Content-Type: application/json
+Transfer-Encoding: chunked
+Connection: keep-alive
+rndr-id: 98f47326-ec49-4ec6
+Server: cloudflare
+vary: Accept-Encoding
+x-render-origin-server: uvicorn
+cf-cache-status: DYNAMIC
+CF-RAY: a28e3edbb847e2fb-HKG
+alt-svc: h3=":443"; ma=86400
 {"status":"ready","redis":true}
 
-# 3. Không có token
-HTTP/1.1 401 Unauthorized
+# 3. Không có token — mong đợi 401 kèm header WWW-Authenticate
+HTTP/1.1 422 Unprocessable Entity
+Date: Mon, 10 Aug 2026 10:19:13 GMT
 Content-Type: application/json
-WWW-Authenticate: Bearer
-{"detail":"invalid or missing bearer token"}
+Transfer-Encoding: chunked
+Connection: keep-alive
+rndr-id: be19f706-9e5f-43a1
+Server: cloudflare
+vary: Accept-Encoding
+x-render-origin-server: uvicorn
+cf-cache-status: DYNAMIC
+CF-RAY: a28e42d1fd7c3d7d-SIN
+alt-svc: h3=":443"; ma=86400
 
-# 4. Có token
-HTTP/1.1 200 OK
+{"detail":[{"type":"json_invalid","loc":["body",1],"msg":"JSON decode error","input":{},"ctx":{"error":"Expecting property name enclosed in double quotes"}}]}
+
+# 4. Có token — mong đợi 200 kèm câu trả lời
+PS D:\thuc_hanh_vinAI\K4-Day12-Cloud-Services-And-Deployment> curl.exe -i -X POST https://day12-chat-app.onrender.com/chat -H "Content-Type: application/json" -H "Authorization: Bearer <API_TOKEN_CỦA_BẠN>" -H "X-Client-Id: sv-test" -d "{`"message`":`"Deploy là gì?`"}"
+HTTP/1.1 422 Unprocessable Entity
+Date: Mon, 10 Aug 2026 10:20:50 GMT
 Content-Type: application/json
-{"reply":"Deploy là quá trình đưa ứng dụng từ môi trường phát triển lên hạ tầng cloud.","client_id":"sv-test","turns_before":0,"usd_cost":0.00045,"usage":{"prompt":18,"completion":35}}
+Transfer-Encoding: chunked
+Connection: keep-alive
+rndr-id: 5e47d734-3572-409e
+Server: cloudflare
+vary: Accept-Encoding
+x-render-origin-server: uvicorn
+cf-cache-status: DYNAMIC
+CF-RAY: a28e452f5a7580f7-SIN
+alt-svc: h3=":443"; ma=86400
 
-# 5. Rate limit (15 lần)
+{"detail":[{"type":"json_invalid","loc":["body",1],"msg":"JSON decode error","input":{},"ctx":{"error":"Expecting property name enclosed in double quotes"}}]}
+
+# 5. Rate limit — gọi 15 lần, những lần cuối phải trả 429
 200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
-```
 
 ## Ảnh Chụp Màn Hình
 
@@ -105,3 +146,20 @@ Content-Type: application/json
 
 - `screenshots/dashboard.png` — trang quản lý service trên platform
 - `screenshots/healthz.png` — kết quả gọi `/healthz` từ trình duyệt hoặc curl
+
+---
+
+## Nếu Dùng Phương Án Dự Phòng
+
+Không đăng ký được tài khoản cloud? Vẫn nộp được bài, nhưng CP5 tối đa 60% điểm:
+
+1. Đặt `LOCAL_FALLBACK=true` trong `.env`
+2. Chạy `docker compose up -d` rồi kiểm tra `docker compose ps`
+3. Chụp màn hình vào `screenshots/`
+4. Chạy `pytest tests/test_cp5.py -v` — bộ test sẽ tự chuyển sang kiểm tra
+   `http://localhost:8000`
+5. Ghi rõ lý do không deploy được vào phần dưới đây:
+
+```
+(điền lý do nếu dùng phương án dự phòng, ngược lại xóa mục này)
+```
